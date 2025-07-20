@@ -1,0 +1,35 @@
+[
+  {
+    "intent": "about.melvin",
+    "utterances": [
+      "about melvin", "tell me about melvin", "who is melvin", "the developer", "who made this", "who is behind this", "melvin porcalla", "who built this", "developer info"
+    ]
+  },
+  {
+    "intent": "about.skills",
+    "utterances": [
+      "what are Melvin's skills", "what can Melvin do", "skills please", "developer skills", "frontend stack"
+    ],
+    "answers": [
+      "Melvin specializes in HTML, CSS, JavaScript, Vue.js, and Bootstrap. He also works with Tailwind, Vite, and Git."
+    ]
+  },
+  {
+    "intent": "about.projects",
+    "utterances": [
+      "show me Melvin's projects", "portfolio", "projects?", "can I see his work?", "GitHub projects"
+    ],
+    "answers": [
+      "Check out Melvin’s projects at https://github.com/mvporcalla"
+    ]
+  },
+  {
+    "intent": "about.contact",
+    "utterances": [
+      "how can I contact Melvin", "email?", "contact info", "how do I reach the developer", "how do I reach Melvin"
+    ],
+    "answers": [
+      "You can reach Melvin at porcallamelvin@gmail.com"
+    ]
+  }
+]

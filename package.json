@@ -1,0 +1,17 @@
+{
+  "name": "melvin-chatbot-api",
+  "version": "1.0.0",
+  "description": "Smart chatbot API using node-nlp",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.0",
+    "express": "^4.21.2",
+    "node-nlp": "^4.27.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,0 +1,163 @@
+<!-- public/index.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MelvinBot</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background-color: #333;
+      font-family: sans-serif;
+    }
+
+    #chat-icon {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #4a90e2;
+      color: white;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 24px;
+      z-index: 1000;
+    }
+
+    #chatbox {
+      display: none;
+      position: fixed;
+      bottom: 100px;
+      right: 24px;
+      width: 320px;
+      height: 420px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 1000;
+    }
+
+    #chat-messages {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      background: #f9f9f9;
+    }
+
+    .message {
+      margin: 8px 0;
+      padding: 8px 12px;
+      border-radius: 16px;
+      max-width: 80%;
+      line-height: 1.4;
+    }
+
+    .user {
+      background: #e1f0ff;
+      align-self: flex-end;
+      text-align: right;
+    }
+
+    .bot {
+      background: #eaeaea;
+      align-self: flex-start;
+      text-align: left;
+    }
+
+    #chat-input {
+      display: flex;
+      border-top: 1px solid #ddd;
+    }
+
+    #chat-input input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      outline: none;
+      font-size: 14px;
+    }
+
+    #chat-input button {
+      padding: 10px 16px;
+      background: #4a90e2;
+      border: none;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    @media (max-width: 400px) {
+      #chatbox {
+        width: 90%;
+        right: 5%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div id="chat-icon" onclick="toggleChat()">💬</div>
+
+<div id="chatbox">
+  <div id="chat-messages"></div>
+  <div id="chat-input">
+    <input type="text" id="message" placeholder="Say something..." onkeydown="handleKey(event)" />
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+  const toggleChat = () => {
+    const chatbox = document.getElementById('chatbox');
+    chatbox.style.display = chatbox.style.display === 'flex' ? 'none' : 'flex';
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter') sendMessage();
+  };
+
+  const sendMessage = async () => {
+    const input = document.getElementById('message');
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    appendMessage('user', msg);
+    input.value = '';
+    input.focus();
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      });
+
+      const data = await res.json();
+      appendMessage('bot', data.answer || 'Sorry, I have no reply.');
+    } catch (err) {
+      appendMessage('bot', 'Error connecting to the server.');
+      console.error(err);
+    }
+  };
+
+  const appendMessage = (sender, text) => {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = `message ${sender}`;
+    div.textContent = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  };
+</script>
+
+</body>
+</html>

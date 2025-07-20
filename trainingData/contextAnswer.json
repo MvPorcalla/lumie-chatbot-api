@@ -1,0 +1,16 @@
+{
+  "about.lumie": {
+    "answers": [
+      "I'm here to assist you in exploring Melvin's portfolio, projects, and skills.",
+      "Think of me as your interactive guide to Melvin Porcalla’s frontend development journey.",
+      "I help you learn about Melvin’s work, answer questions, and occasionally tell jokes!"
+    ]
+  },
+  "about.melvin": {
+    "answers": [
+      "Melvin is a frontend developer from the Philippines who built this portfolio using Vue.js, HTML, CSS, JavaScript, Tailwind, and Bootstrap.",
+      "Melvin Porcalla is the creative mind behind this site — he specializes in modern web development.",
+      "Looking to learn more about Melvin’s skills or contact him? Just ask!"
+    ]
+  }
+}
