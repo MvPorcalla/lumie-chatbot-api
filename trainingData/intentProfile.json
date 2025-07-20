@@ -1,11 +1,5 @@
 [
   {
-    "intent": "about.melvin",
-    "utterances": [
-      "about melvin", "tell me about melvin", "who is melvin", "the developer", "who made this", "who is behind this", "melvin porcalla", "who built this", "developer info"
-    ]
-  },
-  {
     "intent": "about.skills",
     "utterances": [
       "what are Melvin's skills", "what can Melvin do", "skills please", "developer skills", "frontend stack"

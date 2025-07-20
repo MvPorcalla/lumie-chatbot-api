@@ -4,96 +4,145 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { NlpManager } = require('node-nlp');
+const crypto = require('crypto');
+const Fuse = require('fuse.js');
+require('dotenv').config();
 
 const app = express();
-require('dotenv').config();
 const PORT = process.env.PORT || 3000;
 
-
-// Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Create NLP manager
 const manager = new NlpManager({ languages: ['en'], forceNER: true });
+const userContexts = {}; // { [userId]: { lastIntent: string } }
 
-// Load training data from multiple files
-const intentFiles = ['./trainingData/intentGeneral.json', './trainingData/intentProfile.json'];
-const contextMap = JSON.parse(fs.readFileSync('./trainingData/contextMap.json', 'utf8'));
-const contextAnswers = JSON.parse(fs.readFileSync('./trainingData/contextAnswer.json', 'utf8'));
-// const followupMap = JSON.parse(fs.readFileSync('./trainingData/followupMap.json', 'utf8'));
+const intentFiles = [
+  './trainingData/intentGeneral.json',
+  './trainingData/intentProfile.json',
+  './trainingData/intentContextual.json',
+];
 
+let allIntents = [];
+let allUtterances = [];
 
 for (const file of intentFiles) {
   try {
-    const trainingData = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    for (const item of trainingData) {
-      const { intent, utterances, answers } = item;
-      utterances.forEach(phrase => manager.addDocument('en', phrase, intent));
-      if (answers) {
-        answers.forEach(reply => manager.addAnswer('en', intent, reply));
+    const trainingData = JSON.parse(fs.readFileSync(file, 'utf8'));
+    allIntents = allIntents.concat(trainingData);
+
+    trainingData.forEach(({ intent, utterances, answers, context, setContext }) => {
+      if (!intent || !Array.isArray(utterances)) return;
+
+      utterances.forEach((u) => {
+        manager.addDocument('en', u, intent);
+        allUtterances.push({ utterance: u, intent, context, answers, setContext });
+      });
+
+      if (Array.isArray(answers)) {
+        answers.forEach((a) => manager.addAnswer('en', intent, a));
       }
-    }
+    });
   } catch (err) {
-    console.error(`Failed to load or parse ${file}:`, err.message);
+    console.error(`Failed to load ${file}:`, err.message);
   }
 }
 
-// Train and save the model
+const fuse = new Fuse(allUtterances, {
+  keys: ['utterance'],
+  threshold: 0.35,
+  includeScore: true,
+});
+
+const modelPath = './model.nlp';
 (async () => {
-  await manager.train();
-  manager.save();
+  try {
+    await manager.train();
+    await manager.save(modelPath);
+    console.log('✅ NLP model trained and saved');
+  } catch (err) {
+    console.error('❌ Model training failed:', err.message);
+  }
 })();
 
-// Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/debug/intents', (req, res) => {
+  res.json(allIntents);
 });
-
-app.get('/health', (req, res) => {
-  res.send({ status: 'OK', time: new Date().toISOString() });
-});
-
-let lastIntent = null; // Track the previous intent
 
 app.post('/api/chat', async (req, res) => {
-  const message = req.body.message.toLowerCase().trim();
-  const response = await manager.process('en', message);
-  let intent = response.intent;
-  let answer = response.answer;
+  const message = req.body.message?.toLowerCase().trim();
+  const userId = req.body.userId || crypto.randomBytes(8).toString('hex');
 
-  // Handle contextMap: "who_are_you" → check keywords → resolve to context intent like "about.lumie"
-  if (contextMap[intent]) {
-    for (const keyword in contextMap[intent]) {
-      if (message.includes(keyword)) {
-        intent = contextMap[intent][keyword];
-        break;
-      }
+  if (!message) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+
+  const userContext = userContexts[userId]?.lastIntent || null;
+  const response = await manager.process('en', message);
+  let { intent, answer } = response;
+
+  let validIntent = null;
+
+  if (intent === 'None') {
+    const results = fuse.search(message);
+    if (results.length > 0) {
+  const best = results[0].item;
+  const matchedIntent = best.intent;
+
+  // Strict context enforcement
+  if (!best.context || (userContext && best.context.includes(userContext))) {
+    validIntent = best;
+    intent = matchedIntent;
+  } else {
+    // Try to find another match with same intent but context-compatible
+    validIntent = allUtterances.find(
+      (i) => i.intent === matchedIntent && (!i.context || (userContext && i.context.includes(userContext)))
+    );
+
+    if (validIntent) {
+      intent = matchedIntent;
+    } else {
+      // No valid intent found due to context mismatch
+      intent = 'None';
+      validIntent = null;
     }
   }
+}
 
-  // Check contextAnswer
-  if (contextAnswers[intent]) {
-    const possibleAnswers = contextAnswers[intent].answers;
-    answer = possibleAnswers[Math.floor(Math.random() * possibleAnswers.length)];
+  } else {
+    const matches = allIntents.filter((i) => i.intent === intent);
+    validIntent = matches.find((i) => !i.context || i.context.includes(userContext)) || matches[0];
   }
 
-  // Final fallback
-  if (!answer) {
-    answer = "Sorry, I didn't understand that.";
+  // ✅ Debug log
+  console.log(`[User: ${userId}] Message: "${message}" → Intent: ${intent} | Context: ${userContext || 'none'}`);
+  console.log(`→ SetContext: ${validIntent?.setContext || 'none'}`);
+
+  if (validIntent?.setContext) {
+    userContexts[userId] = { lastIntent: validIntent.setContext };
   }
 
-  lastIntent = intent;
-  res.json({ answer, intent }); // Removed `followups` from the response
+  if ((!answer || answer === '') && validIntent?.answers?.length > 0) {
+    answer = validIntent.answers[Math.floor(Math.random() * validIntent.answers.length)];
+  }
+
+  if (!answer || !validIntent) {
+    answer = "Sorry, I didn't quite get that. Try asking something else!";
+  }
+
+  res.json({ answer, intent, userId });
 });
 
-
-
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
+app.post('/api/retrain', async (req, res) => {
+  try {
+    await manager.train();
+    await manager.save('./model.nlp');
+    res.json({ message: 'Model retrained successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Model retraining failed', details: err.message });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`🤖 MelvinBot API running at http://localhost:${PORT}`);
+  console.log(`Bot is running on http://localhost:${PORT}`);
 });

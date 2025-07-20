@@ -61,19 +61,6 @@
   },
 
   {
-    "intent": "who_are_you",
-    "utterances": ["who are you", "what are you", "tell me about yourself", "introduce yourself", "what's your name", "name please", "who is lumie", "describe yourself", "your name", "what do you do"],
-    "answers": [
-        "Hi there! Just to clarify — are you asking about me, Lumie, or about Melvin, the developer behind this portfolio?",
-        "I'm Lumie, your digital assistant 🤖. Curious to know more about me or about Melvin?",
-        "Nice to meet you! Would you like to hear about me, your virtual guide, or Melvin, the real person who built this?",
-        "You're chatting with Lumie! Want to learn about me, or about Melvin, the frontend developer?",
-        "I'm Lumie, here to help you explore. Are you interested in learning more about me or about Melvin?",
-        "Just your friendly assistant here 😊 — should I talk about myself or tell you about Melvin?"
-    ]
-  },
-
-  {
     "intent": "help",
     "utterances": [
       "help", "I need help", "can you help me?", "please help", "assist me", "what can I ask you", "how to use this bot", "how do you work lumie"
