@@ -134,7 +134,7 @@ You’ll get a response like:
 {
   "reply": "Sure! Here's a motivational quote for you..."
 }
-
+```
 
 ---
 
