@@ -35,9 +35,9 @@ You can easily connect this to a frontend (e.g. a portfolio chatbot UI) via a PO
 │   └── index.html        
 │
 ├── traningData
-│   ├── 
-│   ├── 
-│   └── intentGeneral.json            # NLP data (intents, utterances, answers)
+│   ├── intentGeneral.json            # NLP data (intents, utterances, answers)
+│   ├── intentJoke.json
+│   └── intentQoutes.json
 │
 ├── .gitignore
 ├── LICENSE
