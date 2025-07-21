@@ -20,6 +20,8 @@ You can easily connect this to a frontend (e.g. a portfolio chatbot UI) via a PO
 
 ---
 
+```text
+
 ## 📁 Folder Structure
 
 📦 project-root/
@@ -43,7 +45,7 @@ You can easily connect this to a frontend (e.g. a portfolio chatbot UI) via a PO
 ├── README.md
 └── server.js               # Main server file
 
-````
+```
 
 ---
 
