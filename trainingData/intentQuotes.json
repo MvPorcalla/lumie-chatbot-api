@@ -1,0 +1,22 @@
+[
+  {
+    "intent": "GetQuote",
+    "utterances": ["give me a quote", "inspire me", "quote of the day", "tell me quote"],
+    "answers": [
+      "Believe you can and you're halfway there.",
+      "The best way to get started is to quit talking and begin doing.",
+      "Success is not final, failure is not fatal: it is the courage to continue that counts."
+    ],
+    "setContext": "quote"
+  },
+  {
+    "intent": "GetAnotherQuote",
+    "utterances": ["another one", "more", "another quote", "got more?"],
+    "answers": [
+      "Dream big and dare to fail.",
+      "Don't watch the clock; do what it does. Keep going.",
+      "Act as if what you do makes a difference. It does."
+    ],
+    "context": "quote"
+  }
+]

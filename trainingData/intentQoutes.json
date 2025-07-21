@@ -1,7 +1,0 @@
-[
-  {
-    "intent": "GetQuote",
-    "utterances": ["give me a quote", "inspire me", "quote of the day"],
-    "answers": ["Believe you can and you're halfway there."]
-  }
-]

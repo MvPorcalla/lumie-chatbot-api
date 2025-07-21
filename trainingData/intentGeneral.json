@@ -39,21 +39,18 @@
     "utterances": ["help", "I need help", "can you help me?", "please help", "assist me", "what can I ask you", "how to use this bot", "how do you work lumie"],
     "answers": ["Sure! Just ask me anything. Try 'tell me a joke' or 'what can you do?'", "I'm always here to help! Try saying 'hi' or 'goodbye'.", "Need assistance? I’m ready. Ask away!", "You can chat with me, ask questions, or just hang out. Try saying 'what can you do?'", "Help is my middle name! (Not really, but you get the idea 😄)"]
   },
-
-
   {
     "intent": "who_are_you",
     "utterances": ["who are you", "what are you", "tell me about yourself", "introduce yourself", "what's your name", "name please", "who is lumie", "describe yourself", "your name", "what do you do"],
     "answers": [
-      "I'm Lumie, your digital companion 🤖. I'm here to chat and help you explore ideas.", 
-      "Nice to meet you! I'm Lumie — a friendly virtual assistant for all sorts of conversations.", 
-      "You're chatting with Lumie! Just ask anything and I'll do my best to help!", 
+      "I'm Lumie, your digital companion 🤖. I'm here to chat and help you explore ideas.",
+      "Nice to meet you! I'm Lumie — a friendly virtual assistant for all sorts of conversations.",
+      "You're chatting with Lumie! Just ask anything and I'll do my best to help!",
       "Just your friendly assistant here 😊 — feel free to talk to me anytime!",
-      "I'm here to chat, assist, and keep you company! I can answer questions, tell jokes, and more.", 
-      "Think of me as your digital sidekick — ready for anything!", 
+      "I'm here to chat, assist, and keep you company! I can answer questions, tell jokes, and more.",
+      "Think of me as your digital sidekick — ready for anything!",
       "I help you explore ideas, relax with jokes, or just have a nice chat."
     ]
-    
   },
   {
     "intent": "smalltalk.time",
@@ -70,15 +67,23 @@
     "utterances": ["what can you do", "what are your features", "how can you help me", "how does this work", "what's your purpose"],
     "answers": ["I can chat, tell jokes, cheer you up, and maybe make you smile 😊", "Think of me as your friendly AI sidekick — just ask away!", "I’m here to keep you company, help with ideas, or just listen."]
   },
+  
   {
     "intent": "bored",
     "utterances": ["I'm bored", "entertain me", "do something fun", "got anything fun?", "I'm tired of scrolling"],
-    "answers": ["Wanna hear a joke? Try saying 'tell me a joke' 😄", "How about a fun fact? Or want to just vent?", "Let’s break the boredom together — I’m here!"]
+    "answers": ["Wanna hear a joke? Try saying 'tell me a joke' 😄", "How about a fun fact? Or want to just vent?", "Let’s break the boredom together — I’m here!"],
+    "setContext": "fun"
   },
   {
     "intent": "funfact",
     "utterances": ["tell me a fact", "fun fact please", "do you know something cool", "say something interesting", "teach me something"],
-    "answers": ["Did you know honey never spoils? They found 3000-year-old honey in Egyptian tombs and it’s still good 🍯", "Octopuses have three hearts. That’s two more chances to love you! ❤️", "Bananas are berries, but strawberries aren’t. Nature is weird."]
+    "answers": ["Did you know honey never spoils? They found 3000-year-old honey in Egyptian tombs and it’s still good 🍯", "Octopuses have three hearts. That’s two more chances to love you! ❤️", "Bananas are berries, but strawberries aren’t. Nature is weird."],
+    "setContext": "funfact"
+  },
+  {
+    "intent": "funfact_more",
+    "utterances": ["another one", "more", "again", "give me another"],
+    "answers": ["Sharks are older than trees! 🦈", "A single spaghetti noodle is called a 'spaghetto' 🍝", "Sloths can hold their breath longer than dolphins!"],
+    "context": "funfact"
   }
-
 ]

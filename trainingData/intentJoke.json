@@ -1,12 +1,14 @@
 [
-    {
-        "intent": "jokes",
-        "utterances": ["tell me a joke", "make me laugh", "joke please", "got any jokes?", "funny stuff", "give me a joke", "I want a joke", "say something funny", "entertain me"],
-        "answers": ["Why don’t developers go broke? Because they use cache!", "Why did the frontend developer break up with the backend developer? Too many issues.", "Why do Java developers wear glasses? Because they can't C#!", "How many programmers does it take to change a light bulb? None, that's a hardware problem.", "Why did the bug go to therapy? It couldn't cope with being caught!", "What’s a robot’s favorite music? Heavy metal 🤖🎸", "404 joke not found… or maybe it is 👀"]
-    },
-    {
-        "intent": "jokes_followup",
-        "utterances": ["another one", "one more joke", "got more?", "that was funny", "more jokes please"],
-        "answers": ["Alright! Why do programmers prefer dark mode? Because the light attracts bugs 🐛", "Here’s another — What’s a computer’s favorite snack? Microchips! 😂"]
-    }
+  {
+    "intent": "tell_joke",
+    "utterances": ["joke", "tell me a joke", "tell me joke", "make me laugh", "say something funny"],
+    "answers": ["Why don’t skeletons fight each other? They don’t have the guts."],
+    "setContext": "jokes"
+  },
+  {
+    "intent": "jokes_followup",
+    "utterances": ["another one", "more jokes", "one more", "got more?"],
+    "answers": ["I would tell you a construction pun, but I'm still working on it."],
+    "context": "jokes"
+  }
 ]
