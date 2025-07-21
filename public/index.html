@@ -124,11 +124,12 @@
         });
 
         const data = await res.json();
-        appendMessage(data.reply, 'bot');
+        appendMessage(data.reply, 'bot'); // Handles both replies and rate-limit messages
       } catch (error) {
         appendMessage("⚠️ Failed to connect to Lumie API.", 'bot');
       }
     }
+    
 
     // Optional: Press Enter to send
     document.getElementById('userInput').addEventListener('keypress', (e) => {

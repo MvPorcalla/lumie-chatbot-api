@@ -40,18 +40,6 @@
     "answers": ["Sure! Just ask me anything. Try 'tell me a joke' or 'what can you do?'", "I'm always here to help! Try saying 'hi' or 'goodbye'.", "Need assistance? I’m ready. Ask away!", "You can chat with me, ask questions, or just hang out. Try saying 'what can you do?'", "Help is my middle name! (Not really, but you get the idea 😄)"]
   },
 
-  {
-    "intent": "jokes",
-    "utterances": ["tell me a joke", "make me laugh", "joke please", "got any jokes?", "funny stuff", "give me a joke", "I want a joke", "say something funny", "entertain me"],
-    "answers": ["Why don’t developers go broke? Because they use cache!", "Why did the frontend developer break up with the backend developer? Too many issues.", "Why do Java developers wear glasses? Because they can't C#!", "How many programmers does it take to change a light bulb? None, that's a hardware problem.", "Why did the bug go to therapy? It couldn't cope with being caught!", "What’s a robot’s favorite music? Heavy metal 🤖🎸", "404 joke not found… or maybe it is 👀"]
-  },
-  {
-    "intent": "jokes_followup",
-    "utterances": ["another one", "one more joke", "got more?", "that was funny", "more jokes please"],
-    "answers": ["Alright! Why do programmers prefer dark mode? Because the light attracts bugs 🐛", "Here’s another — What’s a computer’s favorite snack? Microchips! 😂"]
-  },
-
-
 
   {
     "intent": "who_are_you",
