@@ -8,12 +8,17 @@ const bodyParser = require('body-parser');
 const fs = require('fs');
 const cors = require('cors');
 const Fuse = require('fuse.js');
+const path = require('path');
 
 // ========== ⚙️ App Configuration ==========
 const app = express();
 const isDev = process.env.NODE_ENV !== 'production';
 const PORT = process.env.PORT || 3000;
 console.log(`🌐 Environment: ${isDev ? 'Development' : 'Production'}`);
+if (isDev) {
+  console.log("🧪 Dev mode: verbose logging enabled.");
+}
+
 
 app.use(cors());
 app.use(express.json());
@@ -32,12 +37,51 @@ const config = {
   }
 };
 
+// ------------------------------ Debug --------------------------------------
+
+const debugLogPath = path.join(__dirname, 'logs/debug.log');
+const intentLogPath = path.join(__dirname, 'logs/intent_log.txt');
+const logDir = path.join(__dirname, 'logs');
+
+if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
+
+function writeLog(filePath, message) {
+  if (!isDev) return;
+
+  const timestamp = new Date().toISOString();
+  const logEntry = `[${timestamp}] ${message}\n`;
+
+  try {
+    fs.appendFileSync(filePath, logEntry, 'utf8');
+  } catch (err) {
+    console.error(`❌ Failed to write to ${filePath}:`, err.message);
+  }
+}
+
+function devLog(message) {
+  if (!isDev) return; // Only log if in dev mode
+  writeLog(debugLogPath, message);
+}
+
+function logIntent(message) {
+  writeLog(intentLogPath, message);
+}
+
+
+
 // ========== 🧠 In-Memory Stores ==========
 const rateLimitStore = {};  // Tracks timestamps per userId/IP
 const userSessions = {};    // Tracks recent answers & activity
 
 // ========== 📚 Load Intent Training Data ==========
-const data = JSON.parse(fs.readFileSync('./trainingData/intentGeneral.json'));
+let data = [];
+try {
+  const rawData = fs.readFileSync('./trainingData/intentGeneral.json', 'utf-8');
+  data = JSON.parse(rawData);
+} catch (err) {
+  console.error("❌ Failed to load training data:", err.message);
+  process.exit(1);
+}
 
 // ========== 🔍 Fuse.js Fuzzy Search Setup ==========
 const fuse = new Fuse(data, {
@@ -132,12 +176,25 @@ app.post('/api/chat', (req, res) => {
   const { message } = req.body;
   const userId = req.body.userId || req.ip;
 
+  if (isDev) { 
+    logIntent(`💬 Incoming message from ${userId}: "${message}"`); 
+  }
+
+  // ✅ Validate message
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ 
+      reply: "❌ Invalid message input." 
+    });
+  }
+
   // 🕒 Track session activity
   if (!userSessions[userId]) {
     userSessions[userId] = { recentAnswers: [], lastSeen: Date.now() };
   } else {
     userSessions[userId].lastSeen = Date.now();
   }
+
+  if (isDev) devLog(`👤 Session update for ${userId}, recent answers: ${userSessions[userId].recentAnswers}`);
 
   let intent = null;
   let reply = null;
@@ -149,6 +206,8 @@ app.post('/api/chat', (req, res) => {
     const earliest = timestamps[0];
     const retryTime = new Date(earliest + config.rateLimit.windowMs);
     const retryTimeStr = retryTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (isDev) devLog(`⏱️ Rate limit hit for ${userId}, retry after ${retryTimeStr}`);
 
     return res.status(200).json({
       reply: `⏳ You're sending messages too fast. Please wait (until ${retryTimeStr}).`,
@@ -162,6 +221,12 @@ app.post('/api/chat', (req, res) => {
   );
 
   if (exactIntent) {
+    if (isDev) devLog(`🎯 Exact intent match for "${message}" → ${exactIntent.intent}`);
+  } else {
+    if (isDev) devLog(`🔍 No exact match for "${message}", attempting fuzzy match...`);
+  }
+
+  if (exactIntent) {
     intent = exactIntent.intent;
     reply = pickNonRepeatingAnswer(userId, exactIntent.answers);
   }
@@ -171,6 +236,12 @@ app.post('/api/chat', (req, res) => {
     const results = fuse.search(message);
     if (results.length > 0) {
       const best = results[0].item;
+
+      if (isDev) devLog(`🔍 Fuzzy match found: "${message}" → ${best.intent} (score: ${results[0].score})`);
+      if (isDev && intent && intent !== 'None') {
+        logIntent(`✅ Detected intent for ${userId}: ${intent}`);
+      }
+
       intent = best.intent;
       reply = pickNonRepeatingAnswer(userId, best.answers);
     }
@@ -183,12 +254,9 @@ app.post('/api/chat', (req, res) => {
       ? pickNonRepeatingAnswer(userId, noneIntent.answers)
       : `🤖 You said: "${message}"`;
     intent = noneIntent ? 'None' : 'Echo';
-  }
 
-  // 📝 Logging intent detection
-  if (intent) {
-    const logLine = `${new Date().toISOString()} | ${userId} | Intent: ${intent} | Message: "${message}"\n`;
-    fs.appendFileSync('intent_logs.txt', logLine);
+    if (isDev) devLog(`🧱 No match found. Using fallback intent: ${intent}`);
+
   }
 
   // ✅ Send response
