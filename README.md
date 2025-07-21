@@ -1,4 +1,4 @@
-# lumie-chatbot-api
+# Lumie-Chatbot-API
 Lumie is a lightweight and customizable chatbot API powered by Fuse.js for fuzzy intent matching. Built with Node.js and Express, it enables simple, conversational interactions with support for jokes, motivational quotes, and customizable responses.
 
 ---
@@ -17,6 +17,20 @@ Lumie is a lightweight and customizable chatbot API powered by Fuse.js for fuzzy
 ## 🌐 Frontend Integration
 
 You can easily connect this to a frontend (e.g. a portfolio chatbot UI) via a POST request to `/api/chat`.
+
+---
+
+## 📸 Demo
+
+Here’s a preview of Lumie chatbot in action:
+
+![Chatbot Demo](public/lumie-ui.png)
+
+---
+
+## 💬 Example Frontend UI
+
+Check out the [frontend chatbot UI](https://github.com/yourusername/lumie-chat-ui) built with HTML/CSS/JS that connects with this API.
 
 ---
 
@@ -103,6 +117,24 @@ You’ll get a response like:
   "reply": "Hey there! I'm Lumie 👋"
 }
 ```
+
+---
+
+## 📚 API Reference
+
+### POST `/api/chat`
+
+| Field     | Type   | Required | Description              |
+|-----------|--------|----------|--------------------------|
+| `userId`  | String | Yes      | Unique user identifier   |
+| `message` | String | Yes      | User's message input     |
+
+#### ✅ Sample Response
+```json
+{
+  "reply": "Sure! Here's a motivational quote for you..."
+}
+
 
 ---
 
