@@ -123,15 +123,28 @@ NODE_ENV=development node server.js
 
 ## 📝 Customize Your Bot
 
-Open `intents.json` and modify the `utterances` and `answers` for different `intents`.
+1. **Navigate to the `trainingData` folder.**
 
-Example:
+2. **Edit existing intent files** like:
+
+   * `intentGeneral.json`
+   * `intentJokes.json`
+   * `intentQuotes.json`
+
+3. **Or delete or add a new `.json` file** for your own custom intents.
+
+4. **Modify the following in each file:**
+
+   * `"utterances"` – user inputs the bot should recognize.
+   * `"answers"` – how the bot should respond to those inputs.
+
+🛠️ Example structure:
 
 ```json
 {
   "intent": "greetings.hello",
-  "utterances": ["hi", "hello", "hey"],
-  "answers": ["Hi there!", "Hey!", "Hello 👋"]
+  "utterances": ["hi", "hello", "hey there"],
+  "answers": ["Hello!", "Hi! How can I help you today?"]
 }
 ```
 
