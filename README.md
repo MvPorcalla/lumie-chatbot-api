@@ -1,17 +1,22 @@
 # lumie-chatbot-api
-Lumie is a lightweight chatbot assistant built with Node.js, Express, and node-nlp. It uses modular JSON files for training data and delivers context-aware responses. Easily customizable, it supports custom answer sets, context mapping, and follow-ups—ideal for portfolios or custom apps.
-
-A lightweight chatbot server built with Node.js and Express, designed to handle user queries using basic NLP (Natural Language Processing) logic like exact and fuzzy string matching. Great for learning how chatbots work without using heavy external libraries or APIs.
+Lumie is a lightweight and customizable chatbot API powered by Fuse.js for fuzzy intent matching. Built with Node.js and Express, it enables simple, conversational interactions with support for jokes, motivational quotes, and customizable responses.
 
 ---
 
 ## 🚀 Features
 
-- Express.js server with a REST API
-- Simple intent matching using exact and fuzzy logic (Fuse.js)
-- Logging for development and debugging
-- Rate limiting to prevent spam
-- Easily extensible JSON-based intents and responses
+* 🎯 Fuzzy intent matching using Fuse.js
+* 🤖 Easy-to-edit intents via JSON
+* 📜 Built-in and API-based jokes & motivational quotes
+* 🔁 Prevents repeated replies for the same user
+* 🛠️ Developer mode with debug logging
+* 🌐 CORS-ready for frontend integration
+
+---
+
+## 🌐 Frontend Integration
+
+You can easily connect this to a frontend (e.g. a portfolio chatbot UI) via a POST request to `/api/chat`.
 
 ---
 
@@ -47,11 +52,9 @@ A lightweight chatbot server built with Node.js and Express, designed to handle 
 ### 1. 📦 Clone the Repo
 
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/yourusername/lumie-fuse-chatbot-api.git
+cd lumie-fuse-chatbot-api
 ````
-
-> Replace `your-username/your-repo-name` with your actual GitHub URL.
 
 ### 2. 🛠️ Install Dependencies
 
