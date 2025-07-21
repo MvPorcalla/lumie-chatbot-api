@@ -29,8 +29,8 @@ You can easily connect this to a frontend (e.g. a portfolio chatbot UI) via a PO
 ├── /logs                   # Contains debug and intent logs
 │   ├── debug.log
 │   └── intent_log.txt
-├── /node_modules
 │
+├── /node_modules
 ├── public                  # (Optional) Frontend HTML + JS
 │   └── index.html        
 │
@@ -39,9 +39,10 @@ You can easily connect this to a frontend (e.g. a portfolio chatbot UI) via a PO
 │   ├── 
 │   └── intentGeneral.json            # NLP data (intents, utterances, answers)
 │
-├──
-├──
-├──
+├── .gitignore
+├── LICENSE
+├── package-lock.json
+├── package.json
 ├── README.md
 └── server.js               # Main server file
 
