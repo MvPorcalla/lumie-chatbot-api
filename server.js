@@ -29,8 +29,8 @@ app.use(express.static('public')); // Serves from /public folder
 // ========== ⚙️ Runtime Configuration ==========
 const config = {
   rateLimit: {
-    windowMs: 10 * 60 * 1000, // 10 minutes
-    maxRequests: 2
+    windowMs: 30 * 60 * 1000, // 30 minutes
+    maxRequests: 1000
   },
   chat: {
     maxRecentAnswers: 5
@@ -74,10 +74,17 @@ const rateLimitStore = {};  // Tracks timestamps per userId/IP
 const userSessions = {};    // Tracks recent answers & activity
 
 // ========== 📚 Load Intent Training Data ==========
+const trainingDir = './trainingData';
 let data = [];
+
 try {
-  const rawData = fs.readFileSync('./trainingData/intentGeneral.json', 'utf-8');
-  data = JSON.parse(rawData);
+  const files = fs.readdirSync(trainingDir).filter(f => f.endsWith('.json'));
+
+  for (const file of files) {
+    const raw = fs.readFileSync(path.join(trainingDir, file), 'utf-8');
+    const parsed = JSON.parse(raw);
+    data = data.concat(parsed);
+  }
 } catch (err) {
   console.error("❌ Failed to load training data:", err.message);
   process.exit(1);
