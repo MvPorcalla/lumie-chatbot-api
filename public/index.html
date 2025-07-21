@@ -1,164 +1,139 @@
-<!-- public/index.html -->
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>MelvinBot</title>
+  <title>Lumie Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    * { box-sizing: border-box; }
     body {
-      margin: 0;
+      font-family: Arial, sans-serif;
       background-color: #333;
-      font-family: sans-serif;
-    }
-
-    #chat-icon {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: #4a90e2;
-      color: white;
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
+      margin: 0;
+      padding: 0;
       display: flex;
-      align-items: center;
       justify-content: center;
-      cursor: pointer;
-      font-size: 24px;
-      z-index: 1000;
+      align-items: center;
+      height: 100vh;
     }
 
-    #chatbox {
-      display: none;
-      position: fixed;
-      bottom: 100px;
-      right: 24px;
-      width: 320px;
-      height: 420px;
-      background: white;
+    .chat-container {
+      width: 400px;
+      height: 600px;
+      background-color: #fff;
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      z-index: 1000;
     }
 
-    #chat-messages {
+    .chat-header {
+      background-color: #4e8cff;
+      padding: 1rem;
+      color: #fff;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .chat-messages {
       flex: 1;
-      padding: 12px;
+      padding: 1rem;
       overflow-y: auto;
-      background: #f9f9f9;
     }
 
-    .message {
-      margin: 8px 0;
-      padding: 8px 12px;
-      border-radius: 16px;
+    .chat-message {
+      margin-bottom: 1rem;
       max-width: 80%;
+      padding: 0.5rem 0.75rem;
+      border-radius: 10px;
       line-height: 1.4;
     }
 
-    .user {
-      background: #e1f0ff;
+    .user-message {
+      background-color: #dcf8c6;
       align-self: flex-end;
-      text-align: right;
     }
 
-    .bot {
-      background: #eaeaea;
+    .bot-message {
+      background-color: #f1f0f0;
       align-self: flex-start;
-      text-align: left;
     }
 
-    #chat-input {
+    .chat-input {
       display: flex;
       border-top: 1px solid #ddd;
     }
 
-    #chat-input input {
+    .chat-input input {
       flex: 1;
-      padding: 10px;
+      padding: 1rem;
       border: none;
       outline: none;
-      font-size: 14px;
     }
 
-    #chat-input button {
-      padding: 10px 16px;
-      background: #4a90e2;
+    .chat-input button {
+      padding: 1rem;
+      background-color: #4e8cff;
       border: none;
       color: white;
-      font-weight: bold;
       cursor: pointer;
     }
 
-    @media (max-width: 400px) {
-      #chatbox {
-        width: 90%;
-        right: 5%;
-      }
+    .chat-input button:hover {
+      background-color: #3b75d3;
     }
   </style>
 </head>
 <body>
-
-<div id="chat-icon" onclick="toggleChat()">💬</div>
-
-<div id="chatbox">
-  <div id="chat-messages"></div>
-  <div id="chat-input">
-    <input type="text" id="message" placeholder="Say something..." onkeydown="handleKey(event)" />
-    <button onclick="sendMessage()">Send</button>
+  <div class="chat-container">
+    <div class="chat-header">Lumie Chatbot</div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input">
+      <input type="text" id="userInput" placeholder="Type a message..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
   </div>
-</div>
 
-<script>
-  const toggleChat = () => {
-    const chatbox = document.getElementById('chatbox');
-    chatbox.style.display = chatbox.style.display === 'flex' ? 'none' : 'flex';
-  };
+  <script>
+    const chatMessages = document.getElementById('chatMessages');
+    const userId = 'user123'; // or generate a UUID for session tracking
 
-  const handleKey = (e) => {
-    if (e.key === 'Enter') sendMessage();
-  };
-
-  const sendMessage = async () => {
-    const input = document.getElementById('message');
-    const msg = input.value.trim();
-    if (!msg) return;
-
-    appendMessage('user', msg);
-    input.value = '';
-    input.focus();
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
-      });
-
-      const data = await res.json();
-      appendMessage('bot', data.answer || 'Sorry, I have no reply.');
-    } catch (err) {
-      appendMessage('bot', 'Error connecting to the server.');
-      console.error(err);
+    function appendMessage(text, type) {
+      const messageEl = document.createElement('div');
+      messageEl.className = `chat-message ${type}-message`;
+      messageEl.textContent = text;
+      chatMessages.appendChild(messageEl);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-  };
 
-  const appendMessage = (sender, text) => {
-    const container = document.getElementById('chat-messages');
-    const div = document.createElement('div');
-    div.className = `message ${sender}`;
-    div.textContent = text;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-  };
-</script>
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const message = input.value.trim();
+      if (!message) return;
 
+      appendMessage(message, 'user');
+      input.value = '';
 
+      try {
+        const res = await fetch('http://localhost:3000/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ message, userId })
+        });
+
+        const data = await res.json();
+        appendMessage(data.reply, 'bot');
+      } catch (error) {
+        appendMessage("⚠️ Failed to connect to Lumie API.", 'bot');
+      }
+    }
+
+    // Optional: Press Enter to send
+    document.getElementById('userInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
 </body>
 </html>

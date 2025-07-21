@@ -1,148 +1,96 @@
-// server.js
-
 const express = require('express');
+const bodyParser = require('body-parser');
 const fs = require('fs');
-const path = require('path');
-const { NlpManager } = require('node-nlp');
-const crypto = require('crypto');
+const cors = require('cors');
 const Fuse = require('fuse.js');
-require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
+app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
-const manager = new NlpManager({ languages: ['en'], forceNER: true });
-const userContexts = {}; // { [userId]: { lastIntent: string } }
+// 👉 Serve static frontend files from public/
+app.use(express.static('public'));
 
-const intentFiles = [
-  './trainingData/intentGeneral.json',
-  './trainingData/intentProfile.json',
-  './trainingData/intentContextual.json',
-];
+// Load intents data
+const data = JSON.parse(fs.readFileSync('./trainingData/intentGeneral.json'));
 
-let allIntents = [];
-let allUtterances = [];
-
-for (const file of intentFiles) {
-  try {
-    const trainingData = JSON.parse(fs.readFileSync(file, 'utf8'));
-    allIntents = allIntents.concat(trainingData);
-
-    trainingData.forEach(({ intent, utterances, answers, context, setContext }) => {
-      if (!intent || !Array.isArray(utterances)) return;
-
-      utterances.forEach((u) => {
-        manager.addDocument('en', u, intent);
-        allUtterances.push({ utterance: u, intent, context, answers, setContext });
-      });
-
-      if (Array.isArray(answers)) {
-        answers.forEach((a) => manager.addAnswer('en', intent, a));
-      }
-    });
-  } catch (err) {
-    console.error(`Failed to load ${file}:`, err.message);
-  }
-}
-
-const fuse = new Fuse(allUtterances, {
-  keys: ['utterance'],
-  threshold: 0.35,
+// Fuse.js setup for fuzzy searching
+const fuse = new Fuse(data, {
+  keys: ['utterances'],
+  threshold: 0.4,
   includeScore: true,
 });
 
-const modelPath = './model.nlp';
-(async () => {
-  try {
-    await manager.train();
-    await manager.save(modelPath);
-    console.log('✅ NLP model trained and saved');
-  } catch (err) {
-    console.error('❌ Model training failed:', err.message);
-  }
-})();
+// Track recent responses to avoid repetition
+const userSessions = {};
 
-app.get('/debug/intents', (req, res) => {
-  res.json(allIntents);
-});
-
-app.post('/api/chat', async (req, res) => {
-  const message = req.body.message?.toLowerCase().trim();
-  const userId = req.body.userId || crypto.randomBytes(8).toString('hex');
-
-  if (!message) {
-    return res.status(400).json({ error: 'Message is required' });
+function pickNonRepeatingAnswer(userId, answers) {
+  if (!userSessions[userId]) {
+    userSessions[userId] = { recentAnswers: [] };
   }
 
-  const userContext = userContexts[userId]?.lastIntent || null;
-  const response = await manager.process('en', message);
-  let { intent, answer } = response;
+  const recent = userSessions[userId].recentAnswers;
+  const availableAnswers = answers.filter(a => !recent.includes(a));
 
-  let validIntent = null;
-
-  if (intent === 'None') {
-    const results = fuse.search(message);
-    if (results.length > 0) {
-  const best = results[0].item;
-  const matchedIntent = best.intent;
-
-  // Strict context enforcement
-  if (!best.context || (userContext && best.context.includes(userContext))) {
-    validIntent = best;
-    intent = matchedIntent;
+  let selected;
+  if (availableAnswers.length > 0) {
+    selected = availableAnswers[Math.floor(Math.random() * availableAnswers.length)];
+    recent.push(selected);
   } else {
-    // Try to find another match with same intent but context-compatible
-    validIntent = allUtterances.find(
-      (i) => i.intent === matchedIntent && (!i.context || (userContext && i.context.includes(userContext)))
-    );
-
-    if (validIntent) {
-      intent = matchedIntent;
-    } else {
-      // No valid intent found due to context mismatch
-      intent = 'None';
-      validIntent = null;
-    }
+    selected = answers[Math.floor(Math.random() * answers.length)];
+    userSessions[userId].recentAnswers = [selected];
   }
+
+  if (recent.length > 5) recent.shift();
+
+  return selected;
 }
 
-  } else {
-    const matches = allIntents.filter((i) => i.intent === intent);
-    validIntent = matches.find((i) => !i.context || i.context.includes(userContext)) || matches[0];
-  }
-
-  // ✅ Debug log
-  console.log(`[User: ${userId}] Message: "${message}" → Intent: ${intent} | Context: ${userContext || 'none'}`);
-  console.log(`→ SetContext: ${validIntent?.setContext || 'none'}`);
-
-  if (validIntent?.setContext) {
-    userContexts[userId] = { lastIntent: validIntent.setContext };
-  }
-
-  if ((!answer || answer === '') && validIntent?.answers?.length > 0) {
-    answer = validIntent.answers[Math.floor(Math.random() * validIntent.answers.length)];
-  }
-
-  if (!answer || !validIntent) {
-    answer = "Sorry, I didn't quite get that. Try asking something else!";
-  }
-
-  res.json({ answer, intent, userId });
+// Root route
+app.get('/', (req, res) => {
+  res.send('Lumie API is running...');
 });
 
-app.post('/api/retrain', async (req, res) => {
-  try {
-    await manager.train();
-    await manager.save('./model.nlp');
-    res.json({ message: 'Model retrained successfully' });
-  } catch (err) {
-    res.status(500).json({ error: 'Model retraining failed', details: err.message });
+// Chat route
+app.post('/api/chat', (req, res) => {
+  const { message, userId } = req.body;
+  let intent = null;
+  let reply = null;
+
+  // Check for exact match
+  const exactIntent = data.find(d =>
+    d.utterances.map(u => u.toLowerCase()).includes(message.toLowerCase())
+  );
+
+  if (exactIntent) {
+    intent = exactIntent.intent;
+    reply = pickNonRepeatingAnswer(userId, exactIntent.answers);
   }
+
+  // Fuzzy match if no exact match
+  if (!reply) {
+    const results = fuse.search(message);
+    if (results.length > 0) {
+      const best = results[0].item;
+      intent = best.intent;
+      reply = pickNonRepeatingAnswer(userId, best.answers);
+    }
+  }
+
+  // Fallback to default response
+  if (!reply) {
+    const noneIntent = data.find(d => d.intent === 'None');
+    reply = noneIntent
+      ? pickNonRepeatingAnswer(userId, noneIntent.answers)
+      : "Hmm, I’m not sure how to respond to that yet.";
+  }
+
+  res.json({ reply });
 });
 
+// Start server
 app.listen(PORT, () => {
-  console.log(`Bot is running on http://localhost:${PORT}`);
+  console.log(`Lumie is live at http://localhost:${PORT}`);
 });
