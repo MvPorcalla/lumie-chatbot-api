@@ -14,22 +14,28 @@ const app = express();
 const isDev = process.env.NODE_ENV !== 'production';
 const PORT = process.env.PORT || 3000;
 console.log(`🌐 Environment: ${isDev ? 'Development' : 'Production'}`);
+
 if (isDev) {
   console.log("🧪 Dev mode: verbose logging enabled.");
 }
 
-if (isDev) {
-  app.get('/debug-log', (req, res) => {
-    const logFilePath = path.join(__dirname, 'logs/debug.log');
-
-    res.sendFile(logFilePath, (err) => {
-      if (err) {
-        console.error('Error sending log file:', err);
-        res.status(500).send('Failed to send log file.');
-      }
-    });
-  });
+// Middleware to block access unless in dev
+function assertIsDev(req, res, next) {
+  if (!isDev) return res.status(403).send("🚫 Access denied.");
+  next();
 }
+
+app.get('/debug-log', assertIsDev, (req, res) => {
+  const logFilePath = path.join(__dirname, 'logs/debug.log');
+
+  res.sendFile(logFilePath, (err) => {
+    if (err) {
+      console.error('Error sending log file:', err);
+      res.status(500).send('Failed to send log file.');
+    }
+  });
+});
+
 
 app.use(cors());
 app.use(express.json({ limit: '10kb' })); // ⬅️ Limits body to ~10KB
@@ -38,13 +44,13 @@ app.use(express.json({ limit: '10kb' })); // ⬅️ Limits body to ~10KB
 const staticPath = path.join(__dirname, 'public');
 app.use(express.static(staticPath)); // Serve static files
 
+// ✅ Serve frontend fallback (e.g., index.html)
 if (!isDev) {
   // Catch-all for SPA routes (e.g. React Router, Vue Router)
   app.get('*', (req, res) => {
     res.sendFile(path.join(staticPath, 'index.html'));
   });
 }
-
 
 // ========== ⚙️ Runtime Configuration ==========
 const config = {
@@ -138,13 +144,26 @@ try {
   process.exit(1);
 }
 
+// ============== Prebuilt Scoped Fuse Map ==============
+const scopedFuses = {};
+data.forEach(entry => {
+  const key = entry.context || entry.setContext;
+  if (key && !scopedFuses[key]) {
+    const scopedData = getScopedData(data, key);
+    scopedFuses[key] = new Fuse(scopedData, {
+      keys: ['utterances'],
+      threshold: config.chat.fuzzyThreshold,
+      includeScore: true,
+    });
+  }
+});
+
 // ============== Global Fuse instance for fallback fuzzy matching ==============
 const globalFuse = new Fuse(data, {
   keys: ['utterances'],
   threshold: config.chat.fuzzyThreshold,
   includeScore: true,
 });
-
 
 // ==========================================
 // 🔐 Rate Limiting
@@ -314,15 +333,7 @@ app.post('/api/chat', (req, res) => {
   if (!reply) {
     // Try scoped fuzzy match first (if user has context)
     if (currentContext) {
-      const scopedData = getScopedData(data, currentContext);
-
-      const scopedFuse = new Fuse(scopedData, {
-        keys: ['utterances'],
-        threshold: config.chat.fuzzyThreshold,
-        includeScore: true,
-      });
-
-      results = scopedFuse.search(message);
+      results = scopedFuses[currentContext]?.search(message) || [];
     }
 
     // If no results or no context, fall back to globalFuse
@@ -383,6 +394,11 @@ app.post('/api/chat', (req, res) => {
     confidence: score || (exactIntent ? 1 : 0)
   });
 });
+
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: '🔍 API route not found' });
+});
+
 
 // ==========================================
 // ▶️ Start Server
