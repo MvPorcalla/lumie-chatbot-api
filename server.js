@@ -200,22 +200,15 @@ function pickNonRepeatingAnswer(userId, answers) {
 
 // ====================================================================
 function updateContext(userId, intentData) {
-  const current = userSessions[userId].currentContext;
   const { context, setContext, intent } = intentData;
   const generalIntents = ['Greet', 'None', 'Goodbye', 'Thanks'];
 
-  if (setContext) {
+  if (!setContext && (!context || generalIntents.includes(intent))) {
+    userSessions[userId].currentContext = null;
+  } else if (setContext) {
     userSessions[userId].currentContext = setContext;
-  } else if (
-    (!context && !setContext) ||
-    generalIntents.includes(intent)
-  ) {
-    if (current !== null) {
-      userSessions[userId].currentContext = null;
-    }
   }
 
-  // ✅ Log intent here (only in dev)
   if (isDev && intent && intent !== 'None') {
     logIntent(`✅ Detected intent for ${userId}: ${intent}`);
   }
