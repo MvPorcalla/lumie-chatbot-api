@@ -72,27 +72,35 @@ function getScopedData(data, context) {
   );
 }
 
+// ===================================================
+
+const CONTEXT_TTL_MS = 5 * 60 * 1000; // ⏳ 5 minutes
+
 function getOrCreateSession(userId) {
   let session = userSessions.get(userId);
+  const now = Date.now();
 
   if (!session) {
     session = {
       recentAnswers: [],
       currentContext: null,
-      lastSeen: Date.now(),
+      lastSeen: now,
     };
   } else {
-    session.lastSeen = Date.now(); // Update timestamp on every access
+    const timeSinceLastSeen = now - session.lastSeen;
+    if (timeSinceLastSeen > CONTEXT_TTL_MS) {
+      session.currentContext = null; // 👈 clear stale context
+    }
+    session.lastSeen = now;
   }
 
-  userSessions.set(userId, session, 3600); // Reset TTL to 1 hour
+  userSessions.set(userId, session, 3600); // reset 1h TTL
   return session;
 }
 
 // ------------------------------ Debug --------------------------------------
 
 const debugLogPath = path.join(__dirname, 'logs/debug.log');
-const intentLogPath = path.join(__dirname, 'logs/intent_log.txt');
 const logDir = path.join(__dirname, 'logs');
 
 try {
@@ -131,11 +139,7 @@ function devLogBlock(userId, userMessage, logs = []) {
   ].join('\n');
 
   writeLog(debugLogPath, formatted);
-}
 
-
-function logIntent(message) {
-  writeLog(intentLogPath, message);
 }
 
 // ========== 🧠 In-Memory Stores ==========
@@ -152,6 +156,11 @@ try {
   for (const file of files) {
     const raw = fs.readFileSync(path.join(trainingDir, file), 'utf-8');
     const parsed = JSON.parse(raw);
+
+    parsed.forEach(intent => {
+      intent.utterances = intent.utterances.map(u => u.toLowerCase());
+    });
+
     data = data.concat(parsed);
   }
 } catch (err) {
@@ -178,7 +187,20 @@ const globalFuse = new Fuse(data, {
   keys: ['utterances'],
   threshold: config.chat.fuzzyThreshold,
   includeScore: true,
+  distance: 100,
+  minMatchCharLength: 3,
 });
+
+
+// =================== ==========================
+
+function searchIntents(message, context = null) {
+  if (context && scopedFuses[context]) {
+    return scopedFuses[context].search(message);
+  }
+  return globalFuse.search(message);
+}
+
 
 // ==========================================
 // 🔐 Rate Limiting
@@ -244,10 +266,6 @@ function updateContext(userId, intentData, message) {
   }
 
   userSessions.set(userId, session);
-
-  if (isDev && intent && intent !== 'None') {
-    logIntent(`✅ [${intent}] ${userId}: "${message}"`);
-  }
 }
 
 // ==========================================
@@ -264,8 +282,6 @@ app.post('/api/chat', (req, res) => {
   const rawMessage = req.body.message;
   const message = typeof rawMessage === 'string' ? rawMessage.trim().toLowerCase() : '';
   const userId = req.body.userId || req.ip;
-
-  if (isDev) logIntent(`💬 Incoming message from ${userId}: "${message}"`);
 
   // ✅ Validate input
   if (!message) {
@@ -288,15 +304,14 @@ app.post('/api/chat', (req, res) => {
   let intent = null;
   let reply = null;
   let score = null;
-  let results = [];
 
   const session = getOrCreateSession(userId);
   const currentContext = session.currentContext;
+  const globalResults = globalFuse.search(message);
+  const scopedResults = currentContext ? searchIntents(message, currentContext) : [];
 
   // 🎯 1. Exact match (prioritize scoped data)
-  const scopedData = currentContext
-    ? data.filter(d => d.context === currentContext || d.setContext === currentContext)
-    : data;
+  const scopedData = currentContext ? getScopedData(data, currentContext) : data;
 
   const exactIntent = scopedData.find(d =>
     d.utterances.some(u => u.toLowerCase() === message)
@@ -310,28 +325,46 @@ app.post('/api/chat', (req, res) => {
 
   // 🔍 2. Fuzzy match (global search, fallback if no exact)
   if (!reply) {
-    // Try scoped fuzzy match first (if user has context)
-    if (currentContext) {
-      results = scopedFuses[currentContext]?.search(message) || [];
+    const scopedResults = currentContext ? searchIntents(message, currentContext) : [];
+
+    // Sort for exact matches and score
+    const sortByRelevance = results => results.sort((a, b) => {
+      const aExact = a.item.utterances.includes(message);
+      const bExact = b.item.utterances.includes(message);
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      return a.score - b.score;
+    });
+
+    sortByRelevance(scopedResults);
+    sortByRelevance(globalResults);
+
+    const bestScoped = scopedResults[0];
+    const bestGlobal = globalResults[0];
+
+    let best = null;
+
+    // Prefer global if it's significantly better (margin of 0.05)
+    if (
+      bestGlobal &&
+      (!bestScoped || bestGlobal.score < bestScoped.score - 0.05)
+    ) {
+      best = bestGlobal;
+    } else if (bestScoped) {
+      best = bestScoped;
     }
 
-    // If no results or no context, fall back to globalFuse
-    if (!results.length) {
-      results = globalFuse.search(message);
-    }
+    const bestIntent = best?.item;
+    score = best?.score;
 
-    const best = results[0]?.item;
-    score = results[0]?.score;
+    if (bestIntent && typeof score === 'number' && score <= config.chat.fuzzyScoreLimit) {
+      const isFollowupOnly = !!bestIntent.context && !bestIntent.setContext;
+      const isInvalidFollowup = isFollowupOnly && bestIntent.context !== currentContext;
 
-    if (best && typeof score === 'number' && score <= config.chat.fuzzyScoreLimit) {
-      const sessionContext = currentContext;
-      const isFollowupOnly = !!best.context && !best.setContext;
-
-      if (isFollowupOnly && best.context !== sessionContext) {
-      } else {
-        intent = best.intent;
-        reply = pickNonRepeatingAnswer(userId, best.answers);
-        updateContext(userId, best, message);
+      if (!isInvalidFollowup) {
+        intent = bestIntent.intent;
+        reply = pickNonRepeatingAnswer(userId, bestIntent.answers);
+        updateContext(userId, bestIntent, message);
       }
     }
   }
@@ -340,7 +373,7 @@ app.post('/api/chat', (req, res) => {
   if (!reply) {
     const fallback = data.find(d => d.intent === 'None');
     intent = fallback ? fallback.intent : 'None';
-    reply = fallback
+    reply = fallback?.answers
       ? pickNonRepeatingAnswer(userId, fallback.answers)
       : `🤖 You said: "${message}"`;
   }
@@ -357,6 +390,24 @@ app.post('/api/chat', (req, res) => {
       logLines.push(`🧱 Fallback intent → ${intent}`);
       if (typeof score === 'number') {
         logLines.push(`   ⤷ Fuzzy match score was too high: ${score.toFixed(2)}`);
+      }
+    }
+
+    if (globalResults.length > 1 || scopedResults?.length > 1) {
+      logLines.push("🔎 Top fuzzy matches:");
+      
+      if (scopedResults?.length) {
+        logLines.push("   (scoped)");
+        scopedResults.slice(0, 3).forEach(r =>
+          logLines.push(`   • ${r.item.intent} (score: ${r.score.toFixed(2)})`)
+        );
+      }
+
+      if (globalResults.length) {
+        logLines.push("   (global)");
+        globalResults.slice(0, 3).forEach(r =>
+          logLines.push(`   • ${r.item.intent} (score: ${r.score.toFixed(2)})`)
+        );
       }
     }
 
