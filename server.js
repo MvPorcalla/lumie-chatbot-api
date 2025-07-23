@@ -170,6 +170,11 @@ function isRateLimited(userId) {
   return false;
 }
 
+// =========================================
+function limitRecent(list, max) {
+  return list.length > max ? list.slice(-max) : list;
+}
+
 // ==========================================
 // 🧠 Session Memory & Repetition Avoidance
 // ==========================================
@@ -189,17 +194,24 @@ function pickNonRepeatingAnswer(userId, answers) {
     recent.push(selected);
   } else {
     selected = answers[Math.floor(Math.random() * answers.length)];
-    userSessions[userId].recentAnswers = [selected];
+    let updatedRecent = [...recent, selected];
+
+    // ✅ Enforce max length after reset
+    if (updatedRecent.length > config.chat.maxRecentAnswers) {
+      updatedRecent.shift(); // Remove oldest
+    }
+
+    userSessions[userId].recentAnswers = updatedRecent;
   }
 
   // Limit memory size
-  if (recent.length > config.chat.maxRecentAnswers) recent.shift();
+  userSessions[userId].recentAnswers = limitRecent(userSessions[userId].recentAnswers, config.chat.maxRecentAnswers);
 
   return selected;
 }
 
 // ====================================================================
-function updateContext(userId, intentData) {
+function updateContext(userId, intentData, message) {
   const { context, setContext, intent } = intentData;
   const generalIntents = ['Greet', 'None', 'Goodbye', 'Thanks'];
 
@@ -210,7 +222,7 @@ function updateContext(userId, intentData) {
   }
 
   if (isDev && intent && intent !== 'None') {
-    logIntent(`✅ Detected intent for ${userId}: ${intent}`);
+    logIntent(`✅ [${intent}] ${userId}: "${message}"`);
   }
 }
 
@@ -262,9 +274,9 @@ app.post('/api/chat', (req, res) => {
 
   // ⏳ Rate limiting
   if (isRateLimited(userId)) {
-    const timestamps = rateLimitStore[userId];
-    const retryTime = new Date(timestamps[0] + config.rateLimit.windowMs);
-    return res.status(200).json({
+    const record = rateLimitStore.get(userId);
+    const retryTime = new Date(record.firstRequestTime + config.rateLimit.windowMs);
+    return res.status(429).json({
       reply: `⏳ You're sending messages too fast. Try again around ${retryTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       context: "rate-limit",
     });
@@ -295,7 +307,7 @@ app.post('/api/chat', (req, res) => {
   if (exactIntent) {
     intent = exactIntent.intent;
     reply = pickNonRepeatingAnswer(userId, exactIntent.answers);
-    updateContext(userId, exactIntent);
+    updateContext(userId, exactIntent, message);
   }
 
   // 🔍 2. Fuzzy match (global search, fallback if no exact)
@@ -321,7 +333,7 @@ app.post('/api/chat', (req, res) => {
     const best = results[0]?.item;
     score = results[0]?.score;
 
-    if (best && score <= config.chat.fuzzyScoreLimit) {
+    if (best && typeof score === 'number' && score <= config.chat.fuzzyScoreLimit) {
       const sessionContext = currentContext;
       const isFollowupOnly = !!best.context && !best.setContext;
 
@@ -329,7 +341,7 @@ app.post('/api/chat', (req, res) => {
       } else {
         intent = best.intent;
         reply = pickNonRepeatingAnswer(userId, best.answers);
-        updateContext(userId, best);
+        updateContext(userId, best, message);
       }
     }
   }
