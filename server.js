@@ -4,7 +4,6 @@
 
 // ========== 🔧 Dependencies ==========
 const express = require('express');
-const bodyParser = require('body-parser');
 const fs = require('fs');
 const cors = require('cors');
 const Fuse = require('fuse.js');
@@ -17,6 +16,19 @@ const PORT = process.env.PORT || 3000;
 console.log(`🌐 Environment: ${isDev ? 'Development' : 'Production'}`);
 if (isDev) {
   console.log("🧪 Dev mode: verbose logging enabled.");
+}
+
+if (isDev) {
+  app.get('/debug-log', (req, res) => {
+    const logFilePath = path.join(__dirname, 'logs/debug.log');
+
+    res.sendFile(logFilePath, (err) => {
+      if (err) {
+        console.error('Error sending log file:', err);
+        res.status(500).send('Failed to send log file.');
+      }
+    });
+  });
 }
 
 app.use(cors());
@@ -58,10 +70,8 @@ try {
     fs.mkdirSync(logDir);
   }
 } catch (err) {
-  console.error('❌ Error ensuring log directory:', err.message);
+  console.error('❌ Error creating log directory:', err.message);
 }
-
-if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
 
 function writeLog(filePath, message) {
   if (!isDev) return;
@@ -76,15 +86,27 @@ function writeLog(filePath, message) {
   }
 }
 
-function devLog(message) {
-  if (!isDev) return; // Only log if in dev mode
-  writeLog(debugLogPath, message);
+function devLogBlock(userId, userMessage, logs = []) {
+  if (!isDev) return;
+
+  const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const separator = '═'.repeat(70);
+  const header = `📩 ${userId} said: "${userMessage}" @ ${timestamp}`;
+
+  const formatted = [
+    `\n${separator}`,
+    header,
+    ...logs.map(line => `  ${line}`),
+    `${separator}\n`,
+  ].join('\n');
+
+  writeLog(debugLogPath, formatted);
 }
+
 
 function logIntent(message) {
   writeLog(intentLogPath, message);
 }
-
 
 
 // ========== 🧠 In-Memory Stores ==========
@@ -168,14 +190,12 @@ function updateContext(userId, intentData) {
 
   if (setContext) {
     userSessions[userId].currentContext = setContext;
-    if (isDev) devLog(`🧭 Context set to "${setContext}"`);
   } else if (
     (!context && !setContext) ||
     generalIntents.includes(intent)
   ) {
     if (current !== null) {
       userSessions[userId].currentContext = null;
-      if (isDev) devLog(`🧭 Cleared context due to general intent "${intent}"`);
     }
   }
 
@@ -266,7 +286,6 @@ app.post('/api/chat', (req, res) => {
     intent = exactIntent.intent;
     reply = pickNonRepeatingAnswer(userId, exactIntent.answers);
     updateContext(userId, exactIntent);
-    if (isDev) devLog(`🎯 Exact match → ${intent}`);
   }
 
   // 🔍 2. Fuzzy match (global search, fallback if no exact)
@@ -286,12 +305,10 @@ app.post('/api/chat', (req, res) => {
       const isFollowupOnly = !!best.context && !best.setContext;
 
       if (isFollowupOnly && best.context !== sessionContext) {
-        if (isDev) devLog(`⚠️ Ignored fuzzy match due to context mismatch (${best.context} ≠ ${sessionContext})`);
       } else {
         intent = best.intent;
         reply = pickNonRepeatingAnswer(userId, best.answers);
         updateContext(userId, best);
-        if (isDev) devLog(`🔍 Fuzzy match → ${intent} (score: ${score})`);
       }
     }
   }
@@ -303,7 +320,26 @@ app.post('/api/chat', (req, res) => {
     reply = fallback
       ? pickNonRepeatingAnswer(userId, fallback.answers)
       : `🤖 You said: "${message}"`;
-    if (isDev) devLog(`🧱 Fallback used → ${intent}`);
+  }
+
+  // 📦 DEV LOGGING (only in development)
+  if (isDev) {
+    const logLines = [];
+
+    if (exactIntent) {
+      logLines.push(`🎯 Exact intent match → ${intent}`);
+    } else if (score !== null) {
+      logLines.push(`🔍 Fuzzy intent match → ${intent} (score: ${score.toFixed(2)})`);
+    } else {
+      logLines.push(`🧱 Fallback intent → ${intent}`);
+    }
+
+    logLines.push(`🧭 Current context → ${userSessions[userId].currentContext || "none"}`);
+
+    const recent = userSessions[userId].recentAnswers || [];
+    logLines.push(`📚 Recent answers:\n${recent.map(a => `   • ${a}`).join('\n')}`);
+
+    devLogBlock(userId, message, logLines); // 🛠️ Your custom debug formatter
   }
 
   // ✅ Response
