@@ -19,12 +19,20 @@ if (isDev) {
   console.log("🧪 Dev mode: verbose logging enabled.");
 }
 
-
 app.use(cors());
 app.use(express.json({ limit: '10kb' })); // ⬅️ Limits body to ~10KB
 
 // ========== 📁 Static Frontend ==========
-app.use(express.static('public')); // Serves from /public folder
+const staticPath = path.join(__dirname, 'public');
+app.use(express.static(staticPath)); // Serve static files
+
+if (!isDev) {
+  // Catch-all for SPA routes (e.g. React Router, Vue Router)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(staticPath, 'index.html'));
+  });
+}
+
 
 // ========== ⚙️ Runtime Configuration ==========
 const config = {
@@ -44,6 +52,14 @@ const config = {
 const debugLogPath = path.join(__dirname, 'logs/debug.log');
 const intentLogPath = path.join(__dirname, 'logs/intent_log.txt');
 const logDir = path.join(__dirname, 'logs');
+
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir);
+  }
+} catch (err) {
+  console.error('❌ Error ensuring log directory:', err.message);
+}
 
 if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
 
@@ -72,7 +88,7 @@ function logIntent(message) {
 
 
 // ========== 🧠 In-Memory Stores ==========
-const rateLimitStore = {};  // Tracks timestamps per userId/IP
+const rateLimitStore = new Map(); // Map is more efficient for frequent updates
 const userSessions = {};    // Tracks recent answers & activity
 
 // ========== 📚 Load Intent Training Data ==========
@@ -99,19 +115,20 @@ function isRateLimited(userId) {
   const now = Date.now();
   const { windowMs, maxRequests } = config.rateLimit;
 
-  if (!rateLimitStore[userId]) {
-    rateLimitStore[userId] = [];
+  const record = rateLimitStore.get(userId) || { count: 0, firstRequestTime: now };
+
+  // Reset counter if time window expired
+  if (now - record.firstRequestTime > windowMs) {
+    rateLimitStore.set(userId, { count: 1, firstRequestTime: now });
+    return false;
   }
 
-  // Remove expired timestamps
-  rateLimitStore[userId] = rateLimitStore[userId].filter(ts => now - ts < windowMs);
+  // Deny if max requests reached
+  if (record.count >= maxRequests) return true;
 
-  // If over limit, deny
-  if (rateLimitStore[userId].length >= maxRequests) {
-    return true;
-  }
-
-  rateLimitStore[userId].push(now);
+  // Increment and save
+  record.count += 1;
+  rateLimitStore.set(userId, record);
   return false;
 }
 
@@ -168,7 +185,6 @@ function updateContext(userId, intentData) {
   }
 }
 
-
 // ==========================================
 // 🧹 Periodic Memory Cleanup (every 10 mins)
 // ==========================================
@@ -176,13 +192,14 @@ setInterval(() => {
   const now = Date.now();
   const windowMs = config.rateLimit.windowMs;
 
-  // Clean rate limit data
-  for (const userId in rateLimitStore) {
-    rateLimitStore[userId] = rateLimitStore[userId].filter(ts => now - ts < windowMs);
-    if (rateLimitStore[userId].length === 0) delete rateLimitStore[userId];
+  // Clean expired rate limits
+  for (const [userId, record] of rateLimitStore.entries()) {
+    if (now - record.firstRequestTime > windowMs) {
+      rateLimitStore.delete(userId);
+    }
   }
 
-  // Clean stale sessions (older than 1 hour)
+  // Session cleanup remains unchanged
   const sessionTimeout = 60 * 60 * 1000;
   for (const userId in userSessions) {
     const session = userSessions[userId];
@@ -190,7 +207,7 @@ setInterval(() => {
       delete userSessions[userId];
     }
   }
-}, 10 * 60 * 1000);
+}, 10 * 60 * 1000); // Every 10 mins
 
 // ==========================================
 // 🚀 Routes
@@ -262,13 +279,12 @@ app.post('/api/chat', (req, res) => {
 
     const results = fuse.search(message);
     const best = results[0]?.item;
-    const score = results[0]?.score;
+    score = results[0]?.score;
 
     if (best && score <= config.chat.fuzzyScoreLimit) {
       const sessionContext = currentContext;
       const isFollowupOnly = !!best.context && !best.setContext;
 
-      // If follow-up and context mismatch, ignore it
       if (isFollowupOnly && best.context !== sessionContext) {
         if (isDev) devLog(`⚠️ Ignored fuzzy match due to context mismatch (${best.context} ≠ ${sessionContext})`);
       } else {
