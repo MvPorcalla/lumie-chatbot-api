@@ -59,6 +59,14 @@ const config = {
   }
 };
 
+// ============= context filter ===================
+function getScopedData(data, context) {
+  return data.filter(d =>
+    d.context === context || d.setContext === context
+  );
+}
+
+
 // ------------------------------ Debug --------------------------------------
 
 const debugLogPath = path.join(__dirname, 'logs/debug.log');
@@ -301,9 +309,7 @@ app.post('/api/chat', (req, res) => {
   if (!reply) {
     // Try scoped fuzzy match first (if user has context)
     if (currentContext) {
-      const scopedData = data.filter(d =>
-        d.context === currentContext || d.setContext === currentContext
-      );
+      const scopedData = getScopedData(data, currentContext);
 
       const scopedFuse = new Fuse(scopedData, {
         keys: ['utterances'],
