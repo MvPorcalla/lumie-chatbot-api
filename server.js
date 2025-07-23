@@ -130,6 +130,14 @@ try {
   process.exit(1);
 }
 
+// ============== Global Fuse instance for fallback fuzzy matching ==============
+const globalFuse = new Fuse(data, {
+  keys: ['utterances'],
+  threshold: config.chat.fuzzyThreshold,
+  includeScore: true,
+});
+
+
 // ==========================================
 // 🔐 Rate Limiting
 // ==========================================
@@ -271,6 +279,7 @@ app.post('/api/chat', (req, res) => {
   let intent = null;
   let reply = null;
   let score = null;
+  let results = [];
   const currentContext = userSessions[userId].currentContext;
 
   // 🎯 1. Exact match (prioritize scoped data)
@@ -290,13 +299,26 @@ app.post('/api/chat', (req, res) => {
 
   // 🔍 2. Fuzzy match (global search, fallback if no exact)
   if (!reply) {
-    const fuse = new Fuse(data, {
-      keys: ['utterances'],
-      threshold: config.chat.fuzzyThreshold,
-      includeScore: true,
-    });
+    // Try scoped fuzzy match first (if user has context)
+    if (currentContext) {
+      const scopedData = data.filter(d =>
+        d.context === currentContext || d.setContext === currentContext
+      );
 
-    const results = fuse.search(message);
+      const scopedFuse = new Fuse(scopedData, {
+        keys: ['utterances'],
+        threshold: config.chat.fuzzyThreshold,
+        includeScore: true,
+      });
+
+      results = scopedFuse.search(message);
+    }
+
+    // If no results or no context, fall back to globalFuse
+    if (!results.length) {
+      results = globalFuse.search(message);
+    }
+
     const best = results[0]?.item;
     score = results[0]?.score;
 
