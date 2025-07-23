@@ -356,7 +356,7 @@ app.post('/api/chat', (req, res) => {
 
     if (exactIntent) {
       logLines.push(`🎯 Exact intent match → ${intent}`);
-    } else if (score !== null) {
+    } else if (typeof score === 'number') {
       logLines.push(`🔍 Fuzzy intent match → ${intent} (score: ${score.toFixed(2)})`);
     } else {
       logLines.push(`🧱 Fallback intent → ${intent}`);
