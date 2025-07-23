@@ -6,6 +6,7 @@
 const express = require('express');
 const fs = require('fs');
 const cors = require('cors');
+const NodeCache = require("node-cache");
 const Fuse = require('fuse.js');
 const path = require('path');
 
@@ -35,7 +36,6 @@ app.get('/debug-log', assertIsDev, (req, res) => {
     }
   });
 });
-
 
 app.use(cors());
 app.use(express.json({ limit: '10kb' })); // ⬅️ Limits body to ~10KB
@@ -72,6 +72,22 @@ function getScopedData(data, context) {
   );
 }
 
+function getOrCreateSession(userId) {
+  let session = userSessions.get(userId);
+
+  if (!session) {
+    session = {
+      recentAnswers: [],
+      currentContext: null,
+      lastSeen: Date.now(),
+    };
+  } else {
+    session.lastSeen = Date.now(); // Update timestamp on every access
+  }
+
+  userSessions.set(userId, session, 3600); // Reset TTL to 1 hour
+  return session;
+}
 
 // ------------------------------ Debug --------------------------------------
 
@@ -122,10 +138,9 @@ function logIntent(message) {
   writeLog(intentLogPath, message);
 }
 
-
 // ========== 🧠 In-Memory Stores ==========
-const rateLimitStore = new Map(); // Map is more efficient for frequent updates
-const userSessions = {};    // Tracks recent answers & activity
+const rateLimitCache = new NodeCache({ checkperiod: 600 }); // 10 minutes
+const userSessions = new NodeCache({ stdTTL: 3600, checkperiod: 600 }); // 1 hour TTL, auto cleanup every 10 mins
 
 // ========== 📚 Load Intent Training Data ==========
 const trainingDir = './trainingData';
@@ -172,20 +187,17 @@ function isRateLimited(userId) {
   const now = Date.now();
   const { windowMs, maxRequests } = config.rateLimit;
 
-  const record = rateLimitStore.get(userId) || { count: 0, firstRequestTime: now };
+  let record = rateLimitCache.get(userId);
 
-  // Reset counter if time window expired
-  if (now - record.firstRequestTime > windowMs) {
-    rateLimitStore.set(userId, { count: 1, firstRequestTime: now });
+  if (!record) {
+    rateLimitCache.set(userId, { count: 1, firstRequestTime: now }, windowMs / 1000); // TTL in seconds
     return false;
   }
 
-  // Deny if max requests reached
   if (record.count >= maxRequests) return true;
 
-  // Increment and save
   record.count += 1;
-  rateLimitStore.set(userId, record);
+  rateLimitCache.set(userId, record, (record.firstRequestTime + windowMs - now) / 1000);
   return false;
 }
 
@@ -198,33 +210,22 @@ function limitRecent(list, max) {
 // 🧠 Session Memory & Repetition Avoidance
 // ==========================================
 function pickNonRepeatingAnswer(userId, answers) {
-  if (!userSessions[userId]) {
-    userSessions[userId] = { 
-      recentAnswers: [] 
-    };
-  }
+  let session = getOrCreateSession(userId);
 
-  const recent = userSessions[userId].recentAnswers;
+  const recent = session.recentAnswers;
   const availableAnswers = answers.filter(a => !recent.includes(a));
-
   let selected;
+
   if (availableAnswers.length > 0) {
     selected = availableAnswers[Math.floor(Math.random() * availableAnswers.length)];
     recent.push(selected);
   } else {
     selected = answers[Math.floor(Math.random() * answers.length)];
-    let updatedRecent = [...recent, selected];
-
-    // ✅ Enforce max length after reset
-    if (updatedRecent.length > config.chat.maxRecentAnswers) {
-      updatedRecent.shift(); // Remove oldest
-    }
-
-    userSessions[userId].recentAnswers = updatedRecent;
+    recent.push(selected); // push again even if repeated
   }
 
-  // Limit memory size
-  userSessions[userId].recentAnswers = limitRecent(userSessions[userId].recentAnswers, config.chat.maxRecentAnswers);
+  session.recentAnswers = limitRecent(recent, config.chat.maxRecentAnswers);
+  userSessions.set(userId, session);
 
   return selected;
 }
@@ -234,40 +235,20 @@ function updateContext(userId, intentData, message) {
   const { context, setContext, intent } = intentData;
   const generalIntents = ['Greet', 'None', 'Goodbye', 'Thanks'];
 
+  let session = getOrCreateSession(userId);
+
   if (!setContext && (!context || generalIntents.includes(intent))) {
-    userSessions[userId].currentContext = null;
+    session.currentContext = null;
   } else if (setContext) {
-    userSessions[userId].currentContext = setContext;
+    session.currentContext = setContext;
   }
+
+  userSessions.set(userId, session);
 
   if (isDev && intent && intent !== 'None') {
     logIntent(`✅ [${intent}] ${userId}: "${message}"`);
   }
 }
-
-// ==========================================
-// 🧹 Periodic Memory Cleanup (every 10 mins)
-// ==========================================
-setInterval(() => {
-  const now = Date.now();
-  const windowMs = config.rateLimit.windowMs;
-
-  // Clean expired rate limits
-  for (const [userId, record] of rateLimitStore.entries()) {
-    if (now - record.firstRequestTime > windowMs) {
-      rateLimitStore.delete(userId);
-    }
-  }
-
-  // Session cleanup remains unchanged
-  const sessionTimeout = 60 * 60 * 1000;
-  for (const userId in userSessions) {
-    const session = userSessions[userId];
-    if (!session.lastSeen || now - session.lastSeen > sessionTimeout) {
-      delete userSessions[userId];
-    }
-  }
-}, 10 * 60 * 1000); // Every 10 mins
 
 // ==========================================
 // 🚀 Routes
@@ -293,26 +274,24 @@ app.post('/api/chat', (req, res) => {
 
   // ⏳ Rate limiting
   if (isRateLimited(userId)) {
-    const record = rateLimitStore.get(userId);
-    const retryTime = new Date(record.firstRequestTime + config.rateLimit.windowMs);
+    const record = rateLimitCache.get(userId);
+    const retryTime = record
+      ? new Date(record.firstRequestTime + config.rateLimit.windowMs)
+      : new Date(Date.now() + config.rateLimit.windowMs);
+
     return res.status(429).json({
-      reply: `⏳ You're sending messages too fast. Try again around ${retryTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      reply: `⏳ You've reached your limit. Try again around ${retryTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       context: "rate-limit",
     });
   }
-
-  // 🧠 Initialize session
-  if (!userSessions[userId]) {
-    userSessions[userId] = { recentAnswers: [], lastSeen: Date.now(), currentContext: null };
-  } else {
-    userSessions[userId].lastSeen = Date.now();
-  }
-
+  
   let intent = null;
   let reply = null;
   let score = null;
   let results = [];
-  const currentContext = userSessions[userId].currentContext;
+
+  const session = getOrCreateSession(userId);
+  const currentContext = session.currentContext;
 
   // 🎯 1. Exact match (prioritize scoped data)
   const scopedData = currentContext
@@ -372,24 +351,27 @@ app.post('/api/chat', (req, res) => {
 
     if (exactIntent) {
       logLines.push(`🎯 Exact intent match → ${intent}`);
-    } else if (typeof score === 'number') {
+    } else if (typeof score === 'number' && reply) {
       logLines.push(`🔍 Fuzzy intent match → ${intent} (score: ${score.toFixed(2)})`);
     } else {
       logLines.push(`🧱 Fallback intent → ${intent}`);
+      if (typeof score === 'number') {
+        logLines.push(`   ⤷ Fuzzy match score was too high: ${score.toFixed(2)}`);
+      }
     }
 
-    logLines.push(`🧭 Current context → ${userSessions[userId].currentContext || "none"}`);
+    logLines.push(`🧭 Current context → ${session.currentContext || "none"}`);
 
-    const recent = userSessions[userId].recentAnswers || [];
+    const recent = session.recentAnswers || [];
     logLines.push(`📚 Recent answers:\n${recent.map(a => `   • ${a}`).join('\n')}`);
 
-    devLogBlock(userId, message, logLines); // 🛠️ Your custom debug formatter
+    devLogBlock(userId, message, logLines);
   }
 
   // ✅ Response
   res.json({
     reply,
-    context: userSessions[userId].currentContext || "none",
+    context: session.currentContext || "none",
     intent,
     confidence: score || (exactIntent ? 1 : 0)
   });
@@ -398,7 +380,6 @@ app.post('/api/chat', (req, res) => {
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: '🔍 API route not found' });
 });
-
 
 // ==========================================
 // ▶️ Start Server
