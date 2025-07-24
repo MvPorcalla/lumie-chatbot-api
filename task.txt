@@ -9,6 +9,11 @@ Then allow fallback to previous if desired later (UX-based).
 
 ===========================================================================================================
 
+IMPORTANT:
+Modularize the Code : separate all the functions to separate files to organize
+
+===========================================================================================================
+
 Here’s a list of **practical future improvements** you can tackle, broken into categories:
 
 ---
