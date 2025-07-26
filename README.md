@@ -1,4 +1,4 @@
-# Lumie-Rule-Base-Chatbot-API
+# Lumie-Chatbot-API
 Lumie is a lightweight and customizable chatbot API powered by Fuse.js for fuzzy intent matching. Built with Node.js and Express, it enables simple, conversational interactions with support for jokes, motivational quotes, and customizable responses.
 
 ---
